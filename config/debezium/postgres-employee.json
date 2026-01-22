@@ -4,12 +4,14 @@
     "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
     "database.hostname": "ep-royal-bird-abwk6kxv-pooler.eu-west-2.aws.neon.tech",
     "database.port": "5432",
-    "database.user": "debezium_user",
-    "database.password": "strong_password",
+    "database.user": "neondb_owner",
+    "database.password": "npg_5uamkynztKW3",
     "database.dbname": "Ale-nestjsDB",
     "database.sslmode": "require",
+
     "topic.prefix": "cdc",
     "table.include.list": "public.Employee",
+
     "plugin.name": "pgoutput",
     "slot.name": "debezium_employee",
     "publication.autocreate.mode": "filtered"
