@@ -156,6 +156,6 @@ esegui:
 5) Esegui docker exec -it docker-kafka-1 kafka-console-consumer --bootstrap-server kafka:9092 --topic cdc.public.Employee --from-beginning, e 
 fai un insert nel db. nel file dove hai eseguito questo ultimo comando vedrai l'employe che hai creato, 
 nel payload:
-"payload":{"before":null,"after":{"id":98,"email":"NewUser1@mail.com","name":"NewUser1","createdAt":1769101506257,"updatedAt":1769101506257,"role":"ADMIN","password":"$2b$10$xY.0Syw/BmfxCfGviHuviuVqJU9Bj3B34p4q/a//N2iHQNF4vCrcK"},
+"payload":{"before":null,"after":{"id":98,"email":"NewUser1@mail.com","name":"NewUser1","createdAt":1769101506257,"updatedAt":1769101506257,"role":"ADMIN","password":"$2b$10$xY.0Syw/BmfxCfGviHuviuVqJU9Bj3B34p4q/a//N2iHQNF4vCrcK"},...}
 
 ora che CTL funziona come deve siamo pronti a fare ETL con spark
