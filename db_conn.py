@@ -16,6 +16,6 @@ engine = create_engine(DATABASE_URL)
 # Test: leggere dati dalla tabella Employee
 with engine.connect() as conn:
     # result = conn.execute(text("SELECT table_name FROM information_schema.tables WHERE table_schema='public'")) list all sql tables 
-    result = conn.execute(text('SELECT * FROM "Employee" LIMIT 5'))
+    result = conn.execute(text('SELECT * FROM "Employee"'))
     for row in result:
         print(row)

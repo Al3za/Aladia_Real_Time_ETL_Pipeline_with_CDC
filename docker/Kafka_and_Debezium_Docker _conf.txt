@@ -120,12 +120,42 @@ Compose fa ESATTAMENTE questo.
 
 ------
 
-dopo aver fatto docker-compose up, assicurati che i container zookeeper, kafka, connect siano "up" 
+dopo aver fatto docker-compose up(path: Users\ale\etl_cdc_project\docker>), assicurati che i container zookeeper, kafka, connect siano "up" 
 con il comando docker ps.
 
-per ulteriore sicurezza, fai curl.exe http://localhost:8083/connectors, e se la res e' [] allora
+per ulteriore sicurezza, fai curl.exe http://localhost:8083/connectors, e se la res e' [](connector vuono, non registrato) allora
  puoi procedere e registrare il il connector Debezium con il comando:
+
  curl.exe -X POST http://localhost:8083/connectors `
    -H "Content-Type: application/json" `
    -d "@config/debezium/postgres-employee.json"
 (ho spiegato cosa fa' questo comando nel file conifig/register_connector.txt)
+dopo aver registrato il connector il comando http://localhost:8083/connectors ritorna il nome del connector:["postgres-employee-connector"]
+
+ora per vedere se debezium veramente invia e riceve cdc dobbiamo assicurarci che il task sia attivo,
+e per controllore eseguiamo nel terminal:
+ curl.exe http://localhost:8083/connectors/postgres-employee-connector/status e l'putput dovrebbe essere:
+
+{"name":"postgres-employee-connector","connector":{"state":"RUNNING","worker_id":"172.23.0.4:8083"},"tasks":[{"id":0,"state":"RUNNING","worker_id":"172.23.0.4:8083"}],"type":"source"}.
+
+se "connector" e "tasks" state sono RUNNING, vuol dire che debezium e CDC funzionano.
+
+se si vuole fare una prova se debezium catture gli insert del database, 
+esegui: 
+1) docker compose down e poi up (inizializa debezium e kafka)
+
+2) curl.exe -X POST http://localhost:8083/connectors `
+>>   -H "Content-Type: application/json" `
+>>   -d "@config/debezium/postgres-employee.json" (registra debezium, dagli le coordinate del db e tabella dove guardare e rilevare changes)
+
+3) controlla che i services sono up con docker ps
+
+4) controlla che lo status sia "RUNNING" con curl.exe http://localhost:8083/connectors/postgres-employee-connector/status
+{"name":"postgres-employee-connector","connector":{"state":"RUNNING","worker_id":"172.23.0.4:8083"},"tasks":[{"id":0,"state":"RUNNING","worker_id":"172.23.0.4:8083"}],"type":"source"}
+
+5) Esegui docker exec -it docker-kafka-1 kafka-console-consumer --bootstrap-server kafka:9092 --topic cdc.public.Employee --from-beginning, e 
+fai un insert nel db. nel file dove hai eseguito questo ultimo comando vedrai l'employe che hai creato, 
+nel payload:
+"payload":{"before":null,"after":{"id":98,"email":"NewUser1@mail.com","name":"NewUser1","createdAt":1769101506257,"updatedAt":1769101506257,"role":"ADMIN","password":"$2b$10$xY.0Syw/BmfxCfGviHuviuVqJU9Bj3B34p4q/a//N2iHQNF4vCrcK"},
+
+ora che CTL funziona come deve siamo pronti a fare ETL con spark

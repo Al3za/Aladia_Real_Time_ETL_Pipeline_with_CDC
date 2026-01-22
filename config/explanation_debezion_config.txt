@@ -16,13 +16,12 @@ infatti i dati si database.hostname: e database.dbname: sono parte della stringa
 "database.dbname": "Ale-nestjsDB", // lo troviamo in .env DATABASE_URL
 "database.sslmode": "require",
 
-    "topic.prefix": "cdc",
-    "table.include.list": "public.Employee",
+"topic.prefix": "cdc",
+"table.include.list": "public.Employee",
 
-    "plugin.name": "pgoutput",
-    "slot.name": "debezium_employee",
-    "publication.autocreate.mode": "filtered"
-
+"plugin.name": "pgoutput",
+"slot.name": "debezium_employee",
+"publication.autocreate.mode": "filtered"
 }
 }
 
