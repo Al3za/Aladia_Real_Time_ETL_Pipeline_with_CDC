@@ -1,0 +1,47 @@
+quando eseguiamo nel terminal docker-compose up (prima fai cd docker)
+succede questo:
+
+il container Kafka parte ✅ 
+
+il container Kafka Connect parte ✅
+
+Debezium ESISTE, ma NON sta ancora leggendo nulla
+
+👉 Kafka Connect è vuoto finché non gli dici:
+
+“connettiti a QUESTO database e ascolta QUESTE tabelle" (tramite le istruzioni scritte nel file 
+postgres-employee.json, che sarebbero le coordinatedel nostro db e della tabella employee,
+ dove debezium rileva se ci sono cambiamenti nei dati)”
+
+Questa istruzione si chiama "connector".. e questa istruzione si avvia nel terminal con questo comando:
+
+curl.exe -X POST http://localhost:8083/connectors `
+   -H "Content-Type: application/json" `  
+   -d "@config/debezium/postgres-employee.json"
+
+(spiegazione):
+
+curl -X POST http://localhost:8083/connectors ` # 8083 → REST API di "Kafka Connect" (il container che avviamo su docker-compose e startato durante docker-compose up )
+/connectors → endpoint per creare un nuovo connector.
+È come fare:
+POST /connectors
+  -H "Content-Type: application/json" ` # “Ti mando una configurazione JSON”
+  -d @config/debezium/postgres-employee.json # file che avvia la task Debezium con la configurazione.json descritta nel file "postgres-employee.json"(dove ci sono le connessione al nostro db).
+
+/-------/
+
+con questo comando diciamo a Kafka Connect:
+“avvia un task Debezium con questa configurazione(definita nel file config/debezium/postgres-employee.json)”
+permettendo a Debezium di rilevare i cambiamenti nel nostro db
+
+
+quindi prima fai docker compose up (cd docker), e poi il comando curl sopra.
+
+se il connector e' andato in porto riceverai questo message dopo il curl:
+
+{"name":"postgres-employee-connector","config":{"connector.class":"io.debezium.connector.postgresql.PostgresConnector","database.hostname":"ep-royal-bird-abwk6kxv-pooler.eu-west-2.aws.neon.tech","database.port":"5432","database.user":"debezium_user","database.password":"strong_password","database.dbname":"Ale-nestjsDB","database.sslmode":"require","topic.prefix":"cdc","table.include.list":"public.Employee","plugin.name":"pgoutput","slot.name":"debezium_employee","publication.autocreate.mode":"filtered","name":"postgres-employee-connector"},"tasks":[],"type":"source"}
+SUCCESSO!  Debezium ora è attivo, e come configurato in compose file, quando Debezium rileva un cambiamento nel db, inviera' i messaggi CDC
+al container kafka, e questi messagi sono verrano consumati da spark per fare ETL (Estrazione/trasformazione dati, e invio a bigquery) 
+
+
+ultima cosa importante. potresti ricevere un error con riferimento a "logical replication". se cosi guarda come risolverlo nel file .txt

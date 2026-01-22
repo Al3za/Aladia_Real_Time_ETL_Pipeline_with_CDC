@@ -1,0 +1,48 @@
+# abbiamo bisogno di avviare zookeeper, kafka e  kafka-connect, per poter usare "debezium e cdc".
+# questo perche debezium non e' un pacchetto installabile con pip, ma un sistema distribuito dipendente da questi 3 metodi
+
+version: "3.8"
+
+services:
+  zookeeper: # Tiene metadati e coordinamento. Kafka non parte senza Zookeeper (depends on). il Service(container) Kafka lo usa internamente
+    image: confluentinc/cp-zookeeper:7.5.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+    ports:
+      - "2181:2181"
+
+  kafka: # Riceve eventi (messaggi di debezium quando cambia qualcosa nel db). Li rende disponibili ai consumer (spark, per fare etl con questi dati appena inseriti/updatati)
+    image: confluentinc/cp-kafka:7.5.0 # questo container ci permette di usare kafka in local
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092" # il port standard ufficiale di Kafka, serve a ricevere a creare le connessioni con gli altri container. (Se cambi questo numero funziona lo stesso, a patto che lo cambi anche negli altri servizzi)
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      # usa il nome del container qui, non localhost
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+  kafka-connect: # il ponte. e' un runtime. Espone REST API che ci permette di "registrare connector" tramite endpoint: (curl.exe -X POST http://localhost:8083/connectors), dove in questo endpoint definiamo il db e tabella debezium deve rilevare i cambiamenti dei dati
+    image: debezium/connect:2.5
+    depends_on:
+      - kafka
+    ports:
+      - "8083:8083" # registriamo un connector a questo endpoint(curl.exe -X POST http://localhost:8083/connectors)
+    environment:
+      BOOTSTRAP_SERVERS: kafka:9092 # qua diciamo a debezium di mandare i messagi a kafka (il container creato sopra, ecco perche' e' importante che i servizzi vengono avviati in ordine)
+      GROUP_ID: 1
+      CONFIG_STORAGE_TOPIC: connect_configs
+      OFFSET_STORAGE_TOPIC: connect_offsets
+      STATUS_STORAGE_TOPIC: connect_statuses
+      KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
+      KEY_CONVERTER_SCHEMAS_ENABLE: "false"
+
+# In questo file creiamo un istanza kafka dove vengono salvati i messaggi di debezium
+# e in kafka-connect, accediamo agli endpoint(connectors, curl.exe -X POST http://localhost:8083/connectors) dove tramite post body all endpoint connetcors:(-H "Content-Type: application/json" ` -d @config/debezium/postgres-employee.json),
+# nel body passiamo il file postgres-employee.js dove sono descritti le connessioni con il nostro db postgres, e quindi abilitare CDC correttamente.
