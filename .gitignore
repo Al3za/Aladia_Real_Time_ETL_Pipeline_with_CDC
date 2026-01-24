@@ -1,2 +1,5 @@
 .env
 venv/
+config_anotation/
+docker_anotation/
+spark_anotation/
