@@ -17,12 +17,13 @@ services:
       - zookeeper
     ports:
       - "9092:9092" # il port standard ufficiale di Kafka, serve a ricevere a creare le connessioni con gli altri container. (Se cambi questo numero funziona lo stesso, a patto che lo cambi anche negli altri servizzi)
+      - "29092:29092"
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      # usa il nome del container qui, non localhost
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
 
@@ -46,3 +47,14 @@ services:
 # In questo file creiamo un istanza kafka dove vengono salvati i messaggi di debezium
 # e in kafka-connect, accediamo agli endpoint(connectors, curl.exe -X POST http://localhost:8083/connectors) dove tramite post body all endpoint connetcors:(-H "Content-Type: application/json" ` -d @config/debezium/postgres-employee.json),
 # nel body passiamo il file postgres-employee.js dove sono descritti le connessioni con il nostro db postgres, e quindi abilitare CDC correttamente.
+
+# 3ee6a3c5438d
+
+# docker exec -it docker-kafka-1 kafka-topics --bootstrap-server kafka:9092 --list  # checks if there are initial topics, otherwise it can throw errors
+
+
+
+
+# KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      # KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092 
+      # KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
