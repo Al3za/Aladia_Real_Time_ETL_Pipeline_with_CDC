@@ -22,7 +22,7 @@ spark = SparkSession.builder \
     .config("spark.hadoop.disable.native.lib", "true") \
     .config("spark.sql.streaming.checkpointLocation", "C:/tmp_spark/checkpoint") \
     .getOrCreate()
-
+# Spark Structured Streaming non funzionante a causa di problemi con winutils.exe e windowsIo.files crash
  # .config("spark.sql.streaming.forceDeleteTempCheckpointLocation", "true") \ spark not working. try to add it to see if it works
     # .config("spark.sql.streaming.forceDeleteTempCheckpointLocation", "true")
 spark.sparkContext.setLogLevel("WARN")
