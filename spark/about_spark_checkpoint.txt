@@ -1,0 +1,75 @@
+Sì ✅, quel checkpoint va benissimo per Spark Structured Streaming.
+
+outputMode("append") va bene se stai solo aggiungendo nuovi record (come nel tuo caso).
+
+checkpointLocation è il folder dove Spark salva offset, stato dello streaming e metadata interni.
+
+1️⃣ Contenuto del checkpoint
+
+Nel path /tmp_spark/checkpoint troverai:
+
+offsets per ogni topic/partition Kafka che stai leggendo
+
+metadata dei batch già processati
+
+Eventuali stati intermedi (solo se usi operazioni stateful tipo aggregazioni, join su streaming, watermark, ecc.)
+
+💡 Non troverai dati letti “leggibili” direttamente come CSV o JSON: Spark li salva in formato binario interno, quindi non puoi aprirli e leggerli facilmente.
+
+2️⃣ Come vedere cosa c’è dentro
+
+Ci sono due modi principali:
+
+A) Tramite Spark
+
+Basta riavviare lo streaming con lo stesso checkpoint e Spark riprende dal batch giusto.
+
+Oppure puoi fare un count dei dati elaborati finora salvati in stato (se hai stateful operation).
+
+B) Tramite filesystem
+
+Puoi dare un’occhiata ai file creati, tipo:
+
+ls -R /tmp_spark/checkpoint
+
+
+Vedrai cartelle tipo _spark_metadata, _commits, 0, 1 ecc.
+Ma i file sono binari, non leggibili direttamente.
+
+💡 Sintesi:
+
+Il checkpoint serve solo a Spark per sapere “dove ero arrivato”.
+
+Non è un database, quindi non puoi leggere direttamente i record da lì.
+
+Per vedere i dati, continua a usare console, writeStream su file, o scrittura su database.
+
+OUTPUT DEL COMANDO ls -R /tmp_spark/checkpoint :
+/tmp_spark/checkpoint: 
+commits metadata offsets sources 
+
+/tmp_spark/checkpoint/commits: 0 1 2 
+
+/tmp_spark/checkpoint/offsets: 0 1 2 
+
+/tmp_spark/checkpoint/sources: 0 
+
+/tmp_spark/checkpoint/sources/0:
+
+quello che vedi conferma che il checkpoint è attivo e funzionante.
+
+La cartella commits indica i batch che Spark ha già completato.
+
+La cartella offsets memorizza da dove continuare a leggere nei topic Kafka.
+
+La cartella sources contiene informazioni sullo streaming source (Kafka, in questo caso).
+
+Quindi quando chiudi l’app e la riavvii:
+
+Non devi resettare nulla.
+
+Spark leggerà dall’ultimo offset salvato, continuando con i nuovi record che arrivano.
+
+Tutto il progresso precedente viene ripreso automaticamente grazie al checkpoint.
+
+💡 L’unica cosa da ricordare: se cancelli /tmp_spark/checkpoint, Spark ripartirà da capo, rileggendo tutto dal Kafka (o dall’inizio della source).

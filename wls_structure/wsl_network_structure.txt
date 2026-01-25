@@ -1,0 +1,12 @@
+questa e' l'architettura di linux/ubuntu dentro il vm WSL2. ricordiamo che linux e' un sistema operativo 
+come windows che ci permette di creare un network esattamente come windows, e usare comandi linux invece dei comandi powershell(comunque simili tra loro)
+
+├── home
+│   └── ale_linux
+│       └── Aladia_Real_Time_ETL_Pipeline_with_CDC(contenente l'app clonata da github, con tutti i folder e' file descritti nel repo )
+│
+├── tmp
+├── tmp_spark/checkpoint   👈 QUI
+├── var
+├── etc
+└── ...
