@@ -7,6 +7,7 @@ come windows che ci permette di creare un network esattamente come windows, e us
 │
 ├── tmp
 ├── tmp_spark/checkpoint   👈 QUI
+    tmp/badRecords
 ├── var
 ├── etc
 └── ...

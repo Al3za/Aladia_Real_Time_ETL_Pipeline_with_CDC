@@ -3,3 +3,5 @@ venv/
 config_anotation/
 docker_anotation/
 spark_anotation/
+about_spark_cdc_file/
+wls_structure/
