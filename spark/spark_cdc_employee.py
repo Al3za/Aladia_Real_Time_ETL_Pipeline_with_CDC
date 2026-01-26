@@ -89,7 +89,7 @@ schema = StructType([
 
 # parse the "payload" message data stored in kafka.
 
-df_parsed = (
+df_parsed = ( # data cleaning
     df.selectExpr("CAST(value AS STRING) as json_str")
       .select(from_json(
               col("json_str"), 
@@ -103,26 +103,32 @@ df_parsed = (
 
 df_flat = df_parsed.select(
           col("data.payload.op").alias("op"), # qui attingiamo il campo "op" di debezium (insert/update/delete)
-          col("data.payload.after.*"), # # valori post-update/insert (di kafka)
-          col("data.payload.before.id").alias("before_id"), # valori pre-update/delete )
-          col("data._corrupt_record")  # qui finiranno i record json malformati
+          col("data.payload.after.*"), # # values post-update/insert (di kafka)
+          col("data.payload.before.id").alias("before_id"), # values pre-update/delete )
+          col("data._corrupt_record")  # here will land json invalid/malformed records
 ) # Le colonne di controllo CDC
 
 
-# separate malformed e valid json records(found errors list in tmp/badRecords_checkpoint)
+# handle  malformed e valid json records(found errors list in tmp/badRecords_checkpoint)
 df_malformed = df_flat.filter(col("_corrupt_record").isNotNull()) # record json dei kafka topic malformati(_corrupt_record,andranno in tmp/badRecords_checkpoint, non andranno in db)
 df_valid_json = df_flat.filter(col("_corrupt_record").isNull())
 
+# separate delete functionality to access it in write_to_postgres function(down below)
+delete_df = df_valid_json.filter(col("op") == "d")
+
+# validation only for create/update/read operations
+non_delete_df = df_valid_json.filter(col("op").isin("c", "u", "r"))
 
 # DATA VALIDATION
 
-valid_df = df_valid_json.filter( 
+valid_df = non_delete_df.filter( 
     (col("role").isin("ADMIN", "ENGINEER","INTERN")) &
     (col("email").isNotNull()) &
     (col("password")).isNotNull() &  
     (col("createdAt") > 0)
 )
 
+# gracefully handle invalid records without blocking spark stream 
 invalid_df = df_valid_json.filter(
     (~col("role").isin("ADMIN", "ENGINEER", "INTERN")) |
     col("email").isNull() |
@@ -141,6 +147,7 @@ invalid_df = invalid_df.withColumn(
     """)
 ) # this error will be shows this error if we investigate in /tmp/badRecords_checkpoint
 
+# store malformed and invalid records in badRecords folder(for further analysis)
 (
     df_malformed
     .unionByName(invalid_df, allowMissingColumns=True) # unifica due categorie diverse di errore: errori json, e non allowed roles, datetimes...
@@ -152,26 +159,28 @@ invalid_df = invalid_df.withColumn(
     .start()
 )
 
-
+# FUNCTION TO WRITE BATCH TO POSTGRESQL(with jdbc for insert/update and psycopg2 for delete)
 def write_to_postgres(batch_df, batch_id):
 
+    # print(batch_df.count(),'batch_df.count() check')
+    # print(" batch_df.show():")
+    batch_df.show()
+    # batch_df = cdc_df
     if batch_df.isEmpty():
-        return
+        return # return nothing
 
     # INSERT / UPDATE (ADMIN ONLY)
   
     upsert_df = (
-        batch_df
-        .filter(col("op").isin("c", "u"))
-        .filter(col("role") == "ADMIN")
+        batch_df # batch dara with where applies business logic and deduplication
+        .filter(col("op").isin("c", "u")) # check of a user has inserted or updated. 
+        .filter(col("role") == "ADMIN") # keep only ADMIN role records for insert/update
         .withColumn("updated_ts", to_timestamp(col("updatedAt") / 1000)) # withColumn crea una colonna temporanea che possiamo usare come riferimento, come facciamo sotto
         .dropDuplicates(["id", "updated_ts"]) # si basa su payload "after" data.  
         # “Se Kafka mi manda due volte lo stesso evento CDC (stesso id + stesso timestamp), ne tengo solo uno.” (Perfetto per CDC Debezium, perche a volte crea lo stesso evento 2)
         # questo non conta per update, perche avremo lo stesso id, ma update_ts diverso
     )
-
-    
-        # DROP COLONNE CDC / TECNICHE PRIMA DEL WRITE. in valid_df abbiamo non solo i datatype del db (email,name..) ma anche le
+        # DROP COLONNE CDC / TECNICHE PRIMA DEL WRITE. in cdc_df abbiamo non solo i datatype del db (email,name..) ma anche le
         # colonne CDC definite in "schema/". upsert_df trasorta tutti questi nel blocco codice sotto, dove in pratica facciamo gli insert/update
         # spark le confronta questi dati con la tabella "employee_admin" ma la' non risulta la colonna "op","before_id".. causando l'error
         # quindi le droppiamo per lasciare solo le colonne uguali allo schema del sink db 
@@ -179,31 +188,35 @@ def write_to_postgres(batch_df, batch_id):
         # va' ad inserire nel sink db
 
     if not upsert_df.isEmpty(): 
-        # in upsert_df arrivano i dati di valid_df definiti in 'query'(sotto) quando chiamiamo
+        # in upsert_df arrivano i dati di cdc_df definiti in 'query'(sotto) quando chiamiamo
         #  questa funzione write_to_postgres
         upsert_df.write.jdbc( # JDBC = Java DataBase Connectivity. 
             # il meccanismo standard con cui Spark (che gira su JVM) parla con i database.(fa' operazioni molto velocemente)
             url=jdbc_url,
-            table="employee_admin",
-            mode="append",
+            table="employee_admin", # Table created by Spark 
+            mode="append", # append = add new records without delete the old ones
             properties=jdbc_properties
         )
 
-    # DELETE
+    # DELETE. 
     delete_ids = (
+        # print('delete hit'),
         batch_df
-        .filter(col("op") == "d")
-        .select("before_id")
+        .filter(col("op") == "d") # check if user has deleted a record(op = delete, kafka topic generated by Debezium)
+        .select("before_id") # alias defined in df_flat above
         .dropna()
         .distinct()
         .collect()
     )
 
+    # print("Records da eliminare:", delete_ids)
+
     if delete_ids:
         ids = [r.before_id for r in delete_ids]
+        # print("Deleting IDs:", ids)
 
-        import psycopg2 # usiamo psycopg2 invece di JDBC perché Spark JDBC non ha le funzioni di DELETE 
-        # ma solo insert/update
+        import psycopg2 # Use  psycopg2 instead of JDBC because Spark JDBC doesn't suport DELETE function 
+        # but only insert/update
         conn = psycopg2.connect(db_url)
         cur = conn.cursor()
         cur.execute(
@@ -214,8 +227,11 @@ def write_to_postgres(batch_df, batch_id):
         cur.close()
         conn.close()
 
+# COMBINE valid_df and delete_df to pass both to write_to_postgres function
+cdc_df = valid_df.unionByName(delete_df, allowMissingColumns=True)
+
 query = (
-    valid_df # ad ogni nuovo inser/delete/update, passiamo questi dati e facciamo operazioni crud 
+    cdc_df # for every new inser/delete/update, we feed this data to write_to_postgres function that performs CRUD operations batches
     # in write_to_postgres db
     .writeStream
     .foreachBatch(write_to_postgres)
