@@ -177,7 +177,7 @@ def write_to_postgres(batch_df, batch_id):
         insert_df
         .unionByName(update_df)
         .unionByName(snapshot_df)
-    ) 
+    ) # Combiniamo insert + update + snapshot in un unico dataframe. cosi evitiamo code redundance
 
     upsert_df = (
         upsert_source_df # batch dara with where applies business logic and deduplication
@@ -198,45 +198,35 @@ def write_to_postgres(batch_df, batch_id):
     if not upsert_df.isEmpty(): 
         # in upsert_df arrivano i dati di cdc_df definiti in 'query'(sotto) quando chiamiamo
         #  questa funzione write_to_postgres
-        upsert_df.write.jdbc( # JDBC = Java DataBase Connectivity. 
-            # il meccanismo standard con cui Spark (che gira su JVM) parla con i database.(fa' operazioni molto velocemente)
-            url=jdbc_url,
-            table="employee_admin", # Table created by Spark 
-            mode="append", # append = add new records without delete the old ones
-            properties=jdbc_properties
-        )
+        conn = psycopg2.connect(db_url)
+        cur = conn.cursor()
 
-    # 2️⃣ UPDATE
-    # update_rows = (
-    #     update_df
-    #     .filter(col("role") == "ADMIN")
-    #     .select(
-    #         "id", "email", "name", "password", "role",
-    #         to_timestamp(col("updatedAt") / 1000).alias("updated_ts")
-    #     )
-    #     .dropDuplicates(["id", "updated_ts"])
-    #     .collect()
-    # )
+        # Costruiamo la query UPSERT. lo stack kafka /Spark/ jdbc con spesso fa' partire un error quando si fa' un update, 
+        # perche jdbc tende a fare un insert con i dati dell update, causando un crash di duplicati del db. ecco perche UPSERT 
+        # e' necessario. in questa query stiamo dicendo al db: 
+        # “Se il record esiste già (stesso id), allora aggiorna i campi; altrimenti inseriscilo nuovo.”"
+        query = """
+            INSERT INTO employee_admin (id, email, name, password, role, updatedAt)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            ON CONFLICT (id) DO UPDATE
+            SET email = EXCLUDED.email,
+                name = EXCLUDED.name,
+                password = EXCLUDED.password,
+                role = EXCLUDED.role,
+                updatedAt = EXCLUDED.updatedAt;
+        """
+         # Cicliamo sui record deduplicati
+        rows = upsert_df.select(
+            "id", "email", "name", "password", "role", "updatedAt"
+        ).collect()
+        
+        for r in rows:
+            cur.execute(query, (r.id, r.email, r.name, r.password, r.role, r.updatedAt))
+        
+        conn.commit()
+        cur.close()
+        conn.close()
 
-    # if update_rows:
-    #     conn = psycopg2.connect(db_url)
-    #     cur = conn.cursor()
-    #     for r in update_rows:
-    #         cur.execute(
-    #             """
-    #             UPDATE employee_admin
-    #             SET email = %s,
-    #                 name = %s,
-    #                 password = %s,
-    #                 role = %s,
-    #                 updatedAt = %s
-    #             WHERE id = %s
-    #             """,
-    #             (r.email, r.name, r.password, r.role, r.updated_ts, r.id)
-    #         )
-    #     conn.commit()
-    #     cur.close()
-    #     conn.close()
 
     # DELETE. 
     delete_ids = (
