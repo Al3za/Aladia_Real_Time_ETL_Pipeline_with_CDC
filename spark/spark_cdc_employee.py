@@ -201,6 +201,7 @@ def write_to_postgres(batch_df, batch_id):
         conn = psycopg2.connect(db_url)
         cur = conn.cursor()
 
+        # UPSERT (INSERT / UPDATE)
         # Costruiamo la query UPSERT. lo stack kafka /Spark/ jdbc con spesso fa' partire un error quando si fa' un update, 
         # perche jdbc tende a fare un insert con i dati dell update, causando un crash di duplicati del db. ecco perche UPSERT 
         # e' necessario. in questa query stiamo dicendo al db: 
@@ -233,7 +234,7 @@ def write_to_postgres(batch_df, batch_id):
         # print('delete hit'),
         delete_df
         .select("before_id") # alias defined in df_flat above
-        .dropna()
+        .dropna() 
         .distinct()
         .collect()
     )
