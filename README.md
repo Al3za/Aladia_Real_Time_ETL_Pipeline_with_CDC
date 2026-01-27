@@ -1,10 +1,12 @@
-# Real-time Cdc Etl Pipeline With Spark, Kafka & Debezium
+# Real-time Cdc Etl Pipeline With Spark, Kafka & Debeziu 
 
 ## Overview
 
 This project implements **a real-time Change Data Capture (CDC) ETL pipeline** that streams changes from a PostgreSQL source database to a PostgreSQL sink database using Debezium, Kafka, and Spark Structured **Streaming**.
 
 The pipeline supports **full CRUD semantics, data validation, deduplication,** and **graceful handling of malformed or invalid records**, making it suitable for production-like scenarios.
+
+(This up runs on WSL/Ubuntu, so make sure to clone this project in WSL and install what is described in **Prerequisites**)
 
 ```
 High-Level Architecture
@@ -46,6 +48,15 @@ High-Level Architecture
 
 - Java 11+
 
+- psycopg2-binary==2.9.11 
+
+- pyspark==3.4.1 
+
+- python-dotenv==1.2.1 
+
+- SQLAlchemy==2.0.45 
+
+- typing_extensions==4.15.0
 
 
 1. Start Infrastructure
