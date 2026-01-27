@@ -6,6 +6,7 @@ This project implements **a real-time Change Data Capture (CDC) ETL pipeline** t
 
 The pipeline supports **full CRUD semantics, data validation, deduplication,** and **graceful handling of malformed or invalid records**, making it suitable for production-like scenarios.
 
+```
 High-Level Architecture
 ┌────────────┐
 │ PostgreSQL │ (Source DB)
@@ -33,7 +34,7 @@ High-Level Architecture
 ├── Valid records ──▶ PostgreSQL (Sink DB)
 │
 └── Invalid / malformed records ──▶ Parquet (Dead Letter Queue)
-
+```
 
 # Setup Instructions (Docker Compose)
 
@@ -44,6 +45,7 @@ High-Level Architecture
 - Python 3.10+
 
 - Java 11+
+
 
 
 1. Start Infrastructure
@@ -60,6 +62,7 @@ This starts:
 - Debezium Kafka Connect
 
 
+
 2. # Configure Debezium Connector
 
 Register the PostgreSQL connector:
@@ -72,9 +75,11 @@ Register the PostgreSQL connector:
 This streams table changes to:
 `cdc.public.Employee`
 
+
 3. # Configure Environment Variables
 Create a `.env` file:
 `DATABASE_URL=postgresql://user:password@host:5432/dbname?sslmode=require`
+
 
 4. # Run Spark Streaming Job
 `python spark_cdc_employee.py`
@@ -143,6 +148,7 @@ Key features used:
 **Trade-off**: More complex than microservices-based consumers, but far more expressive.
 
 
+
 # Deduplication Strategy
 
 `dropDuplicates(["id", "updated_ts"])`
@@ -154,6 +160,7 @@ Rationale:
 - Debezium may emit duplicate events
 
 - Deduplication ensures idempotent writes
+
 
 
 # UPSERT & DELETE Handling
@@ -169,15 +176,16 @@ Why?
 - psycopg2 provides precise transactional control
 
 
+
 # Data Validation & Dead Letter Queue
 
 Two layers of validation:
 
-1) **JSON-level** (schema / malformed records)
+1. **JSON-level** (schema / malformed records)
 
    - Captured via `_corrupt_record`
 
-2) **Business-level** (domain rules)
+2. **Business-level** (domain rules)
 
    - Invalid role
 
@@ -194,6 +202,7 @@ This ensures:
 - Stream never crashes
 
 - Bad data is observable and replayable
+
 
 
 # Edge Cases Handled
