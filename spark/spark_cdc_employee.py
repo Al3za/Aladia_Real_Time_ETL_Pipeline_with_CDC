@@ -202,8 +202,8 @@ def write_to_postgres(batch_df, batch_id):
         .filter(col("role") == "ADMIN") # Only ADMINs record for insert/update on destination db
         .withColumn("updated_ts", to_timestamp(col("updatedAt") / 1000)) # withColumn crea una colonna temporanea che possiamo usare come riferimento, come facciamo sotto
         .dropDuplicates(["id", "updated_ts"]) # si basa su payload "after" data.  
-        # “Se Kafka mi manda due volte lo stesso evento CDC (stesso id + stesso timestamp), ne tengo solo uno.” (Perfetto per CDC Debezium, perche a volte crea lo stesso evento 2)
-        # questo non conta per update, perche avremo lo stesso id, ma update_ts diverso
+        # “Se Kafka mi manda due volte lo stesso evento CDC (stesso id + stesso timestamp), ne tengo solo uno.” (Perfetto quando si usa CDC Debezium, perche a volte crea lo stesso evento 2)
+        # questo non conta per update(non viene bloccato), perche' avremo lo stesso id, ma update_ts diverso
     )
         # DROP COLONNE CDC / TECNICHE PRIMA DEL WRITE. in cdc_df abbiamo non solo i datatype del db (email,name..) ma anche le
         # colonne CDC definite in "schema/". upsert_df trasorta tutti questi nel blocco codice sotto, dove in pratica facciamo gli insert/update
@@ -248,7 +248,7 @@ def write_to_postgres(batch_df, batch_id):
         try:
         # UPSERT (INSERT / UPDATE)
         # Costruiamo la query UPSERT. lo stack kafka /Spark/ jdbc con spesso fa' partire un error quando si fa' un update, 
-        # perche jdbc tende a fare un insert con i dati dell update, causando un crash di duplicati del db. ecco perche UPSERT 
+        # perche jdbc tende a fare un insert con i dati dell update, causando un crash a causa di duplicati del db. ecco perche UPSERT 
         # e' necessario. in questa query stiamo dicendo al db: 
         # “Se il record esiste già (stesso id), allora aggiorna i campi; altrimenti inseriscilo nuovo.”"
             if upsert_rows:
@@ -288,7 +288,7 @@ def write_to_postgres(batch_df, batch_id):
             cur.close()
             conn.close()
 
-# COMBINE valid_df and delete_df to pass both to write_to_postgres function
+# COMBINE valid_df and delete_df to pass both data to write_to_postgres function
 cdc_df = valid_df.unionByName(delete_df, allowMissingColumns=True)
 
 query = (
