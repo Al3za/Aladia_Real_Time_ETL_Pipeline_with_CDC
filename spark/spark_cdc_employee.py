@@ -49,7 +49,8 @@ spark.sparkContext.setLogLevel("WARN")
 print("Spark ready! Version:", spark.version)
 
 
-# Leggere dal topic di kafka. ricorda che i topik sono i messaggi CDC salvati qui in kafka
+# connettiamp spark con kafka in modo che esso possa legere i topic immagazinati di kafka . questa connessione tra spark e kafka e definita in localhost:29092(il port di kafka, aperto quando abbiamo fatto docker-compose up -d)
+# cdc.public.Employee e' il prefisso dove kafka immagazina i topics
 df = spark.readStream \
     .format("kafka") \
     .option("kafka.bootstrap.servers", "localhost:29092") \
@@ -184,8 +185,8 @@ def write_to_postgres(batch_df, batch_id):
         .filter(col("role") == "ADMIN") # keep only ADMIN role records for insert/update
         .withColumn("updated_ts", to_timestamp(col("updatedAt") / 1000)) # withColumn crea una colonna temporanea che possiamo usare come riferimento, come facciamo sotto
         .dropDuplicates(["id", "updated_ts"]) # si basa su payload "after" data.  
-        # “Se Kafka mi manda due volte lo stesso evento CDC (stesso id + stesso timestamp), ne tengo solo uno.” (Perfetto per CDC Debezium, perche a volte crea lo stesso evento 2)
-        # questo non conta per update, perche avremo lo stesso id, ma update_ts diverso
+        # “Se Kafka mi manda due volte lo stesso evento CDC (stesso id + stesso timestamp), ne tengo solo uno.” (Perfetto quando si usa CDC Debezium, perche a volte crea lo stesso evento 2)
+        # questo non conta per update(non viene bloccato), perche' avremo lo stesso id, ma update_ts diverso
     )
         # DROP COLONNE CDC / TECNICHE PRIMA DEL WRITE. in cdc_df abbiamo non solo i datatype del db (email,name..) ma anche le
         # colonne CDC definite in "schema/". upsert_df trasorta tutti questi nel blocco codice sotto, dove in pratica facciamo gli insert/update
@@ -199,14 +200,15 @@ def write_to_postgres(batch_df, batch_id):
         # in upsert_df arrivano i dati di cdc_df definiti in 'query'(sotto) quando chiamiamo
         #  questa funzione write_to_postgres
         conn = psycopg2.connect(db_url)
+        # conn.autocommit = False
         cur = conn.cursor()
 
         # UPSERT (INSERT / UPDATE)
         # Costruiamo la query UPSERT. lo stack kafka /Spark/ jdbc con spesso fa' partire un error quando si fa' un update, 
-        # perche jdbc tende a fare un insert con i dati dell update, causando un crash di duplicati del db. ecco perche UPSERT 
+        # perche jdbc tende a fare un insert con i dati dell update, causando un crash a causa di duplicati del db. ecco perche UPSERT 
         # e' necessario. in questa query stiamo dicendo al db: 
         # “Se il record esiste già (stesso id), allora aggiorna i campi; altrimenti inseriscilo nuovo.”"
-        query = """
+        query = """ 
             INSERT INTO employee_admin (id, email, name, password, role, updatedAt)
             VALUES (%s, %s, %s, %s, %s, %s)
             ON CONFLICT (id) DO UPDATE
@@ -215,7 +217,9 @@ def write_to_postgres(batch_df, batch_id):
                 password = EXCLUDED.password,
                 role = EXCLUDED.role,
                 updatedAt = EXCLUDED.updatedAt;
-        """
+        """ # nella query qui sopra, ON CONFLICT (id) DO UPDATE assicura Idempotenza garantita e 
+        # niente duplicati a causa di un crasch di spark e rilettura dei topic kafka gia processati ma non salvati nel file checkpoint 
+        
          # Cicliamo sui record deduplicati
         rows = upsert_df.select(
             "id", "email", "name", "password", "role", "updatedAt"
@@ -256,15 +260,15 @@ def write_to_postgres(batch_df, batch_id):
         cur.close()
         conn.close()
 
-# COMBINE valid_df and delete_df to pass both to write_to_postgres function
+# COMBINE valid_df and delete_df to pass both data to write_to_postgres function
 cdc_df = valid_df.unionByName(delete_df, allowMissingColumns=True)
 
 query = (
     cdc_df # for every new inser/delete/update, we feed this data to write_to_postgres function that performs CRUD operations batches
     # in write_to_postgres db
     .writeStream
-    .foreachBatch(write_to_postgres)
-    .option("checkpointLocation", "/tmp_spark/checkpoint")
+    .foreachBatch(write_to_postgres) # foreachBatch ci permette logica custom (UPSERT / DELETE) e checkpoint gestito da Spark
+    .option("checkpointLocation", "/tmp_spark/checkpoint") # Spark sa da dove ripartire. offset Kafka + stato streaming salvati
     .start()
 )
 
