@@ -17,7 +17,7 @@ services:
       - zookeeper
     ports:
       - "9092:9092" # il port standard ufficiale di Kafka, serve a ricevere a creare le connessioni con gli altri container. (Se cambi questo numero funziona lo stesso, a patto che lo cambi anche negli altri servizzi)
-      - "29092:29092"
+      - "29092:29092" # questo port serve a connettere spark a kafka per leggere gli ultimi topics. Questo port viene invocato da pyspark nel file spark_cdc_employee.py. P.S. Al momento spark e' installato in wsl, e non qui in docker(raccomandabile in docker)
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
