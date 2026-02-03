@@ -109,22 +109,22 @@ df_parsed = ( # df_parsed = data cleaning with only data defined in schema
 
 # df_parsed.printSchema() # check lo schema
 
-df_flat = df_parsed \
-    .filter(col("data.payload").isNotNull()) \
-    .select(
+
+df_flat = df_parsed.select(
           col("data.payload.op").alias("op"), # qui attingiamo il campo "op" di debezium (insert/update/delete) topics
           col("data.payload.after.*"), # # values post-update/insert (di kafka)
           col("data.payload.before.id").alias("before_id"), # id values pre-update/delete )
           col("data._corrupt_record")  # column name where invalid/malformed records ll be stored
-) # Le colonne di controllo CDC, es per efter:
-
-
-# handle  malformed e valid json records(found errors list in tmp/badRecords_checkpoint)
-df_malformed = df_flat.filter(col("_corrupt_record").isNotNull()) # record json dei kafka topic malformati(_corrupt_record, andranno in tmp/badRecords_checkpoint, non andranno in db){
+) # Le colonne di controllo CDC, es per before:
 #   "op": "d",
 #   "before": { "id": 177, ... },
 #   "after": null
 # }
+
+
+# handle  malformed e valid json records(found errors list in tmp/badRecords_checkpoint)
+df_malformed = df_flat.filter(col("_corrupt_record").isNotNull()) # record json dei kafka topic malformati(_corrupt_record, andranno in tmp/badRecords_checkpoint, non andranno in db){
+
 
 df_valid_json = df_flat.filter(col("_corrupt_record").isNull())
 
@@ -188,8 +188,8 @@ def write_to_postgres(batch_df, batch_id):
     snapshot_df = batch_df.filter(col("op") == "r")
     delete_df   = batch_df.filter(col("op") == "d")
      # works tnx to delete_df data  defined in cdc_df(delete_df): (cdc_df = valid_df.unionByName(delete_df, allowMissingColumns=True))
-    delete_df.select("op", "before_id", "id").show(truncate=False)
-    print("DELETE DF COUNT:", delete_df.count())
+    # delete_df.select("op", "before_id", "id").show(truncate=False)
+    # print("DELETE DF COUNT:", delete_df.count())
 
     upsert_source_df = (
         insert_df
@@ -226,17 +226,17 @@ def write_to_postgres(batch_df, batch_id):
         for r in delete_df.select("before_id").dropna().distinct().collect()
     ]
 
-    print("===== DELETE IDS =====", delete_ids)
+    # print("===== DELETE IDS =====", delete_ids)
 
-    if delete_ids:
-       upsert_df = upsert_df.filter(~col("id").isin(delete_ids))
+    # if delete_ids:
+    #    upsert_df = upsert_df.filter(~col("id").isin(delete_ids))
 
     if not upsert_rows and not delete_ids:
         return
  
     if upsert_rows or delete_ids: # 
         # in upsert_df arrivano i dati di cdc_df definiti in 'query'(sotto) quando chiamiamo
-        #  questa funzione write_to_postgres
+        #  questa funzione write_to_postgres()
 
         # --- DB TRANSACTION (1 BATCH = 1 TRANSACTION) --- 
         # O il batch va in port per intero, ho tutti i dati vengono tornati indietro, 
