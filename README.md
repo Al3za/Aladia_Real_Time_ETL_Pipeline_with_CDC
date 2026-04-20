@@ -6,7 +6,7 @@ This project implements **a real-time Change Data Capture (CDC) ETL pipeline** t
 
 The pipeline supports **full CRUD semantics, data validation, deduplication,** and **graceful handling of malformed or invalid records**, making it suitable for production-like scenarios.
 
-(This up runs on WSL/Ubuntu, so make sure to clone this project in WSL and install what is described in **Prerequisites**)
+(This project runs on WSL/Ubuntu, so make sure to clone this project in a **WSL Environment** and to install what is described in **Prerequisites**)
 
 ```
 High-Level Architecture
